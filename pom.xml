@@ -32,8 +32,8 @@
         <module>modules/loxawebsiteexport</module>
         <module>modules/Export-To-Earth</module>
         <module>modules/MapOfCountries</module>
-        <module>modules/ScriptingPlugin</module>
-        <module>modules/TwitterStreamingImporterV2</module>
+<!--        <module>modules/ScriptingPlugin</module>-->
+<!--        <module>modules/TwitterStreamingImporterV2</module>-->
         <module>modules/IsometricLayout</module>
         <module>modules/NetworkSplitter3D</module>
 <!--        Need to migrate away from Joda Time-->
@@ -84,7 +84,8 @@
         <module>modules/OpenSeadragonPlugin</module>
         <!-- Needs to migrate to new Visualization API -->
 <!--        <module>modules/WordCloudPlugin</module>-->
-        <module>modules/BlueskyGephi</module>
+<!--        Needs to not create a project at start-->
+<!--        <module>modules/BlueskyGephi</module>-->
     </modules>
     
     <!-- Properties -->
