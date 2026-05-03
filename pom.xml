@@ -14,7 +14,8 @@
         <!-- Add here the paths of all modules (e.g. <module>modules/MyModule</module>) -->
         <module>modules/GeoLayout</module>
         <module>modules/KBraceFilter</module>
-        <module>modules/LinkfluencePlugin</module>
+<!--        Needs to migrate away from Joda Time-->
+<!--        <module>modules/LinkfluencePlugin</module>-->
         <module>modules/Multimode-Networks</module>
         <module>modules/JsonExporter</module>
         <module>modules/SigmaExporter</module>
@@ -35,7 +36,8 @@
         <module>modules/TwitterStreamingImporterV2</module>
         <module>modules/IsometricLayout</module>
         <module>modules/NetworkSplitter3D</module>
-        <module>modules/ExcelCsvImporter</module>
+<!--        Need to migrate away from Joda Time-->
+<!--        <module>modules/ExcelCsvImporter</module>-->
         <module>modules/OracleDriver</module>
         <module>modules/Lineage</module>
         <module>modules/MdsLayout</module>
@@ -46,7 +48,8 @@
         <module>modules/MdsMetric</module>
         <module>modules/VectorCalculator</module>
         <module>modules/PrestigePlugin</module>
-        <module>modules/HttpGraph</module>
+<!--        Cannot resolve javax.annotation:com.springsource.javax.annotation:1.0.0-->
+<!--        <module>modules/HttpGraph</module>-->
         <module>modules/MinimumSpanningTree</module>
         <module>modules/SimilarityComputer</module>
         <!--        <module>modules/AgensGraphPlugin</module>-->
@@ -69,16 +72,18 @@
         <module>modules/GroupPartition</module>
         <module>modules/HairballBuster</module>
         <module>modules/ForceAtlas3D</module>
-        <module>modules/InspectorTool</module>
+        <!-- Need to migrate to new Visualization API -->
+<!--        <module>modules/InspectorTool</module>-->
         <module>modules/ErGenerator</module>
         <module>modules/KatzCentrality</module>
         <module>modules/PositionRanking</module>
-        <module>modules/Neo4jPlugin</module>
+<!--        <module>modules/Neo4jPlugin</module>-->
         <module>modules/LinkPrediction</module>
         <module>modules/WebPublishPlugin</module>
         <module>modules/OrderedLayout</module>
         <module>modules/OpenSeadragonPlugin</module>
-        <module>modules/WordCloudPlugin</module>
+        <!-- Needs to migrate to new Visualization API -->
+<!--        <module>modules/WordCloudPlugin</module>-->
         <module>modules/BlueskyGephi</module>
     </modules>
     
