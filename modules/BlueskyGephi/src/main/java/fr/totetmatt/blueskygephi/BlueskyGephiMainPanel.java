@@ -16,32 +16,36 @@ import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
 
 /**
  *
  * @author totetmatt
  */
-
 @TopComponent.Description(preferredID = "BlueskyGephiMainPanel",
-        iconBase = "fr/totetmatt/gephi/twitter/twitterlogo.png"
-)
-
-
-@ActionReference(path = "Menu/Window", position = 334)
-@TopComponent.OpenActionRegistration(displayName = "Bluesky Gephi",
-        preferredID = "MainTwitterStreamerWindow")
+        persistenceType = TopComponent.PERSISTENCE_ALWAYS)
+@TopComponent.Registration(mode = "layoutmode", openAtStartup = true, roles = {"overview"}, position = 2)
 @ActionID(category = "Window", id = "fr.totetmatt.blueskygephi.BlueskyGephiMainPanel")
-@TopComponent.Registration(mode = "layoutmode", openAtStartup = true, position=2)
+@ActionReference(path = "Menu/Window", position = 334)
+@TopComponent.OpenActionRegistration(displayName = "#CTL_BlueskyGephiMainPanel",
+        preferredID = "BlueskyGephiMainPanel")
 public class BlueskyGephiMainPanel extends TopComponent {
     protected static final Logger consoleLogger = Logger.getLogger(BlueskyGephiMainPanel.class.getName());
-    private final BlueskyGephi blueskyGephi;
+    private static final Logger logger = Logger.getLogger(BlueskyGephiMainPanel.class.getName());
+    private BlueskyGephi blueskyGephi;
     /**
      * Creates new form BlueskyGephiMainPanel
      */
     public BlueskyGephiMainPanel() {
         initComponents();
-        blueskyGephi  = Lookup.getDefault().lookup(BlueskyGephi.class);
+        setName(NbBundle.getMessage(BlueskyGephiMainPanel.class, "CTL_BlueskyGephiMainPanel"));
+        setToolTipText(NbBundle.getMessage(BlueskyGephiMainPanel.class, "HINT_BlueskyGephiMainPanel"));
+        blueskyGephi = Lookup.getDefault().lookup(BlueskyGephi.class);
+        if (blueskyGephi == null) {
+            logger.warning("BlueskyGephi service not available");
+            return;
+        }
         credentialsHostField.setText(blueskyGephi.getHost());
         credentialsHandleField.setText(blueskyGephi.getHandle());
         credentialsPasswordField.setText(blueskyGephi.getPassword());

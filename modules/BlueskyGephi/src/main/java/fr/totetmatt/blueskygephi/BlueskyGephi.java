@@ -52,11 +52,9 @@ public class BlueskyGephi {
     private GraphModel graphModel;
 
     public BlueskyGephi() {
-        initProjectAndWorkspace();
-
     }
 
-    private void initProjectAndWorkspace() {
+    private void ensureProject() {
         ProjectController projectController = Lookup.getDefault().lookup(ProjectController.class);
         Project currentProject = projectController.getCurrentProject();
         if (currentProject == null) {
@@ -275,12 +273,14 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors, boolean isFollowsActive, boolean isFollowersActive, boolean isBlocksActive) {
+        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors.stream().forEach(actor -> fetchFollowerFollowsFromActor(actor, null, isFollowsActive, isFollowersActive, getIsDeepSearch()));
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors) {
+        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors
