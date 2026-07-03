@@ -104,9 +104,34 @@ public class GephiAPIServer extends NanoHTTPD {
             JsonObject result = new JsonObject();
             result.addProperty("success", true);
             result.addProperty("service", "Gephi MCP API");
-            result.addProperty("version", "1.1.3");
+            result.addProperty("version", "1.2.1");
             result.addProperty("status", "running");
+            // "busy" here (persistently) means Gephi is wedged and needs a restart.
+            result.addProperty("graph_lock", service.graphLockProbe());
+            result.add("graph_lock_stats", service.graphLockStats());
             return result;
+        }
+
+        // ─── View / camera (teaching mode) ───────────────────────────
+
+        if ("/view/focus".equals(uri) && Method.POST.equals(method)) {
+            String mode = body != null && body.has("mode") ? body.get("mode").getAsString() : "graph";
+            String id = body != null && body.has("id") ? body.get("id").getAsString() : null;
+            String source = body != null && body.has("source") ? body.get("source").getAsString() : null;
+            String target = body != null && body.has("target") ? body.get("target").getAsString() : null;
+            Double x = body != null && body.has("x") ? body.get("x").getAsDouble() : null;
+            Double y = body != null && body.has("y") ? body.get("y").getAsDouble() : null;
+            Double w = body != null && body.has("w") ? body.get("w").getAsDouble() : null;
+            Double h = body != null && body.has("h") ? body.get("h").getAsDouble() : null;
+            Double zoom = body != null && body.has("zoom") ? body.get("zoom").getAsDouble() : null;
+            java.util.List<String> select = null;
+            if (body != null && body.has("select")) {
+                select = new java.util.ArrayList<>();
+                for (com.google.gson.JsonElement el : body.get("select").getAsJsonArray()) {
+                    select.add(el.getAsString());
+                }
+            }
+            return service.focusView(mode, id, source, target, x, y, w, h, zoom, select);
         }
 
         // ─── Project ─────────────────────────────────────────────────
@@ -539,7 +564,11 @@ public class GephiAPIServer extends NanoHTTPD {
         // ─── Export ──────────────────────────────────────────────────
 
         if ("/export/gexf".equals(uri) && Method.POST.equals(method)) {
-            if (body == null || !body.has("file")) return errorResult("Missing 'file'");
+            // no "file" (or inline:true) -> return the GEXF as a string in "content"
+            if (body == null || !body.has("file")
+                    || (body.has("inline") && body.get("inline").getAsBoolean())) {
+                return service.exportGexfContent();
+            }
             return service.exportGexf(body.get("file").getAsString());
         }
 
