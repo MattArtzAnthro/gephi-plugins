@@ -12,7 +12,7 @@
 
     <groupId>org.gephi.plugins</groupId>
     <artifactId>gephi-mcp</artifactId>
-    <version>1.2.1</version>
+    <version>1.2.2</version>
     <packaging>nbm</packaging>
 
     <name>Gephi AI (MCP)</name>
@@ -59,6 +59,10 @@
         <dependency>
             <groupId>org.gephi</groupId>
             <artifactId>statistics-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>utils-longtask</artifactId>
         </dependency>
         <dependency>
             <groupId>org.gephi</groupId>
