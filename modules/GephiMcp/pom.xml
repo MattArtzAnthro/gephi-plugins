@@ -12,7 +12,7 @@
 
     <groupId>org.gephi.plugins</groupId>
     <artifactId>gephi-mcp</artifactId>
-    <version>1.2.3</version>
+    <version>1.2.12</version>
     <packaging>nbm</packaging>
 
     <name>Gephi AI (MCP)</name>
@@ -79,6 +79,18 @@
         <dependency>
             <groupId>org.gephi</groupId>
             <artifactId>visualization-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>perspective-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>datalab-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>timeline-api</artifactId>
         </dependency>
 
         <!-- NetBeans Platform APIs (versions managed by gephi-plugin-parent) -->
