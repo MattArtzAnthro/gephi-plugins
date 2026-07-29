@@ -16,33 +16,37 @@ import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
+import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
 
 /**
  *
  * @author totetmatt
  */
-
 @TopComponent.Description(preferredID = "BlueskyGephiMainPanel",
-        iconBase = "fr/totetmatt/gephi/twitter/twitterlogo.png"
-)
-
-
-@ActionReference(path = "Menu/Window", position = 334)
-@TopComponent.OpenActionRegistration(displayName = "Bluesky Gephi",
-        preferredID = "MainTwitterStreamerWindow")
+        persistenceType = TopComponent.PERSISTENCE_ALWAYS)
+@TopComponent.Registration(mode = "layoutmode", openAtStartup = true, roles = {"overview"}, position = 2)
 @ActionID(category = "Window", id = "fr.totetmatt.blueskygephi.BlueskyGephiMainPanel")
-@TopComponent.Registration(mode = "layoutmode", openAtStartup = true, position=2)
+@ActionReference(path = "Menu/Window", position = 334)
+@TopComponent.OpenActionRegistration(displayName = "#CTL_BlueskyGephiMainPanel",
+        preferredID = "BlueskyGephiMainPanel")
 public class BlueskyGephiMainPanel extends TopComponent {
     protected static final Logger consoleLogger = Logger.getLogger(BlueskyGephiMainPanel.class.getName());
-    private final BlueskyGephi blueskyGephi;
+    private static final Logger logger = Logger.getLogger(BlueskyGephiMainPanel.class.getName());
+    private BlueskyGephi blueskyGephi;
     /**
      * Creates new form BlueskyGephiMainPanel
      */
     public BlueskyGephiMainPanel() {
         initComponents();
-        blueskyGephi  = Lookup.getDefault().lookup(BlueskyGephi.class);
-        
+        setName(NbBundle.getMessage(BlueskyGephiMainPanel.class, "CTL_BlueskyGephiMainPanel"));
+        setToolTipText(NbBundle.getMessage(BlueskyGephiMainPanel.class, "HINT_BlueskyGephiMainPanel"));
+        blueskyGephi = Lookup.getDefault().lookup(BlueskyGephi.class);
+        if (blueskyGephi == null) {
+            logger.warning("BlueskyGephi service not available");
+            return;
+        }
+        credentialsHostField.setText(blueskyGephi.getHost());
         credentialsHandleField.setText(blueskyGephi.getHandle());
         credentialsPasswordField.setText(blueskyGephi.getPassword());
         handleSearchTextArea.setText(blueskyGephi.getQuery());
@@ -64,6 +68,8 @@ public class BlueskyGephiMainPanel extends TopComponent {
     private void initComponents() {
 
         credentialsPanel = new javax.swing.JPanel();
+        credentialsHostLabel = new javax.swing.JLabel();
+        credentialsHostField = new javax.swing.JTextField();
         credentialsHandleLabel = new javax.swing.JLabel();
         credentialsHandleField = new javax.swing.JTextField();
         credentialsPasswordLabel = new javax.swing.JLabel();
@@ -85,6 +91,15 @@ public class BlueskyGephiMainPanel extends TopComponent {
         credentialsPanel.setBorder(javax.swing.BorderFactory.createTitledBorder(org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsPanel.border.title"))); // NOI18N
         credentialsPanel.setToolTipText(org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.Credentials.toolTipText")); // NOI18N
         credentialsPanel.setName("Credentials"); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(credentialsHostLabel, org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsHostLabel.text")); // NOI18N
+
+        credentialsHostField.setText(org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsHostField.text")); // NOI18N
+        credentialsHostField.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                credentialsHostFieldActionPerformed(evt);
+            }
+        });
 
         org.openide.awt.Mnemonics.setLocalizedText(credentialsHandleLabel, org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsHandleLabel.text")); // NOI18N
 
@@ -122,14 +137,22 @@ public class BlueskyGephiMainPanel extends TopComponent {
                             .addComponent(credentialsHandleLabel))
                         .addGap(18, 18, 18)
                         .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(credentialsHandleField)
-                            .addComponent(credentialsPasswordField))))
+                            .addComponent(credentialsHandleField, javax.swing.GroupLayout.DEFAULT_SIZE, 263, Short.MAX_VALUE)
+                            .addComponent(credentialsPasswordField)))
+                    .addGroup(credentialsPanelLayout.createSequentialGroup()
+                        .addComponent(credentialsHostLabel)
+                        .addGap(43, 43, 43)
+                        .addComponent(credentialsHostField, javax.swing.GroupLayout.DEFAULT_SIZE, 263, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         credentialsPanelLayout.setVerticalGroup(
             credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(credentialsPanelLayout.createSequentialGroup()
-                .addContainerGap()
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, credentialsPanelLayout.createSequentialGroup()
+                .addGap(0, 9, Short.MAX_VALUE)
+                .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(credentialsHostLabel)
+                    .addComponent(credentialsHostField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(credentialsHandleLabel)
                     .addComponent(credentialsHandleField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -138,8 +161,7 @@ public class BlueskyGephiMainPanel extends TopComponent {
                     .addComponent(credentialsPasswordLabel)
                     .addComponent(credentialsPasswordField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(credentialsConnectButton)
-                .addContainerGap(15, Short.MAX_VALUE))
+                .addComponent(credentialsConnectButton))
         );
 
         handleSearchTextArea.setColumns(20);
@@ -236,7 +258,7 @@ public class BlueskyGephiMainPanel extends TopComponent {
                 .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(runFetchButton)
-                .addContainerGap(51, Short.MAX_VALUE))
+                .addContainerGap(29, Short.MAX_VALUE))
         );
 
         limitCrawlSpinner.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.limitCrawlSpinner.AccessibleContext.accessibleDescription")); // NOI18N
@@ -247,7 +269,7 @@ public class BlueskyGephiMainPanel extends TopComponent {
     }//GEN-LAST:event_isFollowersActivatedActionPerformed
 
     private void credentialsConnectButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_credentialsConnectButtonActionPerformed
-       if(blueskyGephi.connect(credentialsHandleField.getText(), String.valueOf(credentialsPasswordField.getPassword()))){
+       if(blueskyGephi.connect(credentialsHostField.getText(), credentialsHandleField.getText(), String.valueOf(credentialsPasswordField.getPassword()))){
            credentialsConnectButton.setBackground(Color.GREEN);
        } else {
            credentialsConnectButton.setBackground(Color.RED);
@@ -290,11 +312,17 @@ public class BlueskyGephiMainPanel extends TopComponent {
             blueskyGephi.setLimitCrawl(Math.max(1,((int)limitCrawlSpinner.getValue())/100));
     }//GEN-LAST:event_limitCrawlSpinnerPropertyChange
 
+    private void credentialsHostFieldActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_credentialsHostFieldActionPerformed
+        // TODO add your handling code here:
+    }//GEN-LAST:event_credentialsHostFieldActionPerformed
+
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton credentialsConnectButton;
     private javax.swing.JTextField credentialsHandleField;
     private javax.swing.JLabel credentialsHandleLabel;
+    private javax.swing.JTextField credentialsHostField;
+    private javax.swing.JLabel credentialsHostLabel;
     private javax.swing.JPanel credentialsPanel;
     private javax.swing.JPasswordField credentialsPasswordField;
     private javax.swing.JLabel credentialsPasswordLabel;
