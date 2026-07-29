@@ -38,6 +38,7 @@ public class BlueskyGephi {
     protected static final Logger logger = Logger.getLogger(BlueskyGephi.class.getName());
     private final static String NBPREF_BSKY_HANDLE = "bsky.handle";
     private final static String NBPREF_BSKY_PASSWORD = "bsky.password";
+    private final static String NBPREF_ATPROTO_HOST ="bsky.social";
     private final static String NBPREF_QUERY = "query";
     private final static String NBPREF_QUERY_ISFOLLOWERSACTIVE = "query.isFollowersActive";
     private final static String NBPREF_QUERY_ISFOLLOWSACTIVE = "query.isFollowsActive";
@@ -46,16 +47,14 @@ public class BlueskyGephi {
     private final static String NBPREF_QUERY_LIMITCRAWL = "query.limitCrawl";
 
     private final Preferences nbPref = NbPreferences.forModule(BlueskyGephi.class);
-    // If ATProto get released and decentralized, this will change to adapt to other instances
-    final private AtClient client = new AtClient("bsky.social");
+
+    private AtClient client;
     private GraphModel graphModel;
 
     public BlueskyGephi() {
-        initProjectAndWorkspace();
-
     }
 
-    private void initProjectAndWorkspace() {
+    private void ensureProject() {
         ProjectController projectController = Lookup.getDefault().lookup(ProjectController.class);
         Project currentProject = projectController.getCurrentProject();
         if (currentProject == null) {
@@ -63,14 +62,18 @@ public class BlueskyGephi {
         }
     }
 
-    public boolean connect(String handle, String password) {
+    public boolean connect(String host,String handle, String password) {
         nbPref.put(NBPREF_BSKY_HANDLE, handle);
         nbPref.put(NBPREF_BSKY_PASSWORD, password);
+        nbPref.put(NBPREF_ATPROTO_HOST,host);
 
+        client = new AtClient(host);
         return client.comAtprotoServerCreateSession(handle, password);
 
     }
-
+    public String getHost(){
+        return nbPref.get(NBPREF_ATPROTO_HOST,"bsky.social");
+    }
     public String getHandle() {
         return nbPref.get(NBPREF_BSKY_HANDLE, "");
     }
@@ -270,12 +273,14 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors, boolean isFollowsActive, boolean isFollowersActive, boolean isBlocksActive) {
+        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors.stream().forEach(actor -> fetchFollowerFollowsFromActor(actor, null, isFollowsActive, isFollowersActive, getIsDeepSearch()));
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors) {
+        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors
