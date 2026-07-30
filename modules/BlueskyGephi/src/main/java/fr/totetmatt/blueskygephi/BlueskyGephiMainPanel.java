@@ -269,11 +269,32 @@ public class BlueskyGephiMainPanel extends TopComponent {
     }//GEN-LAST:event_isFollowersActivatedActionPerformed
 
     private void credentialsConnectButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_credentialsConnectButtonActionPerformed
-       if(blueskyGephi.connect(credentialsHostField.getText(), credentialsHandleField.getText(), String.valueOf(credentialsPasswordField.getPassword()))){
-           credentialsConnectButton.setBackground(Color.GREEN);
-       } else {
-           credentialsConnectButton.setBackground(Color.RED);
-       }
+        final String host = credentialsHostField.getText();
+        final String handle = credentialsHandleField.getText();
+        final String password = String.valueOf(credentialsPasswordField.getPassword());
+        // Do the network call off the EDT so a slow or failing login never freezes the UI.
+        credentialsConnectButton.setEnabled(false);
+        credentialsConnectButton.setBackground(Color.ORANGE);
+        new javax.swing.SwingWorker<Boolean, Void>() {
+            @Override
+            protected Boolean doInBackground() {
+                return blueskyGephi.connect(host, handle, password);
+            }
+
+            @Override
+            protected void done() {
+                boolean connected = false;
+                try {
+                    connected = get();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+                credentialsConnectButton.setBackground(connected ? Color.GREEN : Color.RED);
+                credentialsConnectButton.setEnabled(true);
+            }
+        }.execute();
     }//GEN-LAST:event_credentialsConnectButtonActionPerformed
 
     private void runFetchButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_runFetchButtonActionPerformed
