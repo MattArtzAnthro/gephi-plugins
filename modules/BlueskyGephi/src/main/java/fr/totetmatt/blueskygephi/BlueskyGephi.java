@@ -1,17 +1,16 @@
 package fr.totetmatt.blueskygephi;
 
 import fr.totetmatt.blueskygephi.atproto.AtClient;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetFollowers;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetFollows;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetList;
 import fr.totetmatt.blueskygephi.atproto.response.common.Identity;
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.LongConsumer;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
@@ -194,6 +193,7 @@ public class BlueskyGephi {
         private volatile boolean cancelled = false;
         private volatile Thread worker;
         private ProgressTicket progressTicket;
+        private LongConsumer onWaiting;
 
         FetchTask(String actor, List<String> listInit, boolean isFollowsActive, boolean isFollowersActive, boolean isDeepSearch) {
             this.actor = actor;
@@ -213,14 +213,15 @@ public class BlueskyGephi {
             }
             try {
                 if (isFollowsActive && !shouldStop()) {
-                    List<AppBskyGraphGetFollows> responses = client.appBskyGraphGetFollows(actor, limitCrawl);
-                    for (var response : responses) {
+                    // Each page is written as it arrives; pagination stops when the
+                    // worker is interrupted (cancellation).
+                    client.appBskyGraphGetFollows(actor, limitCrawl, response -> {
                         if (shouldStop()) {
                             return;
                         }
                         Identity subject = response.getSubject();
                         if (subject == null || subject.getDid() == null) {
-                            continue;
+                            return;
                         }
                         // Capture the graph once so lock/unlock always target the
                         // same instance, and release it in finally so an exception
@@ -247,18 +248,17 @@ public class BlueskyGephi {
                         } finally {
                             graph.writeUnlock();
                         }
-                    }
+                    }, onWaiting);
                 }
 
                 if (isFollowersActive && !shouldStop()) {
-                    List<AppBskyGraphGetFollowers> responses = client.appBskyGraphGetFollowers(actor, limitCrawl);
-                    for (var response : responses) {
+                    client.appBskyGraphGetFollowers(actor, limitCrawl, response -> {
                         if (shouldStop()) {
                             return;
                         }
                         Identity subject = response.getSubject();
                         if (subject == null || subject.getDid() == null) {
-                            continue;
+                            return;
                         }
                         Graph graph = graphModel.getGraph();
                         graph.writeLock();
@@ -281,7 +281,7 @@ public class BlueskyGephi {
                         } finally {
                             graph.writeUnlock();
                         }
-                    }
+                    }, onWaiting);
                 }
             } catch (Exception e) {
                 if (!cancelled) {
@@ -306,6 +306,15 @@ public class BlueskyGephi {
                         }
                         return true;
                     });
+            // Surface the client's rate-limit backoff as a live countdown in the progress bar.
+            onWaiting = remainingMillis -> {
+                if (remainingMillis <= 0L) {
+                    Progress.setDisplayName(progressTicket, taskName);
+                } else {
+                    long seconds = (remainingMillis + 999L) / 1000L;
+                    Progress.setDisplayName(progressTicket, taskName + " - rate limited, retrying in " + seconds + "s");
+                }
+            };
             try {
                 Progress.start(progressTicket);
                 Progress.switchToIndeterminate(progressTicket);
@@ -338,9 +347,17 @@ public class BlueskyGephi {
     }
 
     private Stream<String> manageList(String listId) {
-        List<AppBskyGraphGetList> list = client.appBskyGraphGetList(listId);
-        return list.stream().flatMap(x -> x.getItems().stream().map(y -> y.getSubject().getDid()));
-
+        List<String> dids = new ArrayList<>();
+        client.appBskyGraphGetList(listId, page -> {
+            if (page.getItems() != null) {
+                for (var item : page.getItems()) {
+                    if (item != null && item.getSubject() != null && item.getSubject().getDid() != null) {
+                        dids.add(item.getSubject().getDid());
+                    }
+                }
+            }
+        }, null);
+        return dids.stream();
     }
 
     private void initGraphTable() {
