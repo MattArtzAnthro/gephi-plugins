@@ -1,20 +1,22 @@
 package fr.totetmatt.blueskygephi;
 
 import fr.totetmatt.blueskygephi.atproto.AtClient;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetFollowers;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetFollows;
-import fr.totetmatt.blueskygephi.atproto.response.AppBskyGraphGetList;
 import fr.totetmatt.blueskygephi.atproto.response.common.Identity;
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.LongConsumer;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.gephi.graph.api.Edge;
+import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
@@ -50,6 +52,15 @@ public class BlueskyGephi {
 
     private AtClient client;
     private GraphModel graphModel;
+
+    // Bounded pool so pasting many handles can't spawn an unbounded number of
+    // threads all contending on the graph write-lock and hammering the API.
+    private final ExecutorService executor = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r);
+        t.setDaemon(true);
+        t.setName("[Bsky] worker");
+        return t;
+    });
 
     public BlueskyGephi() {
     }
@@ -161,87 +172,165 @@ public class BlueskyGephi {
     }
 
     private void fetchFollowerFollowsFromActor(String actor, List<String> listInit, boolean isFollowsActive, boolean isFollowersActive, boolean isDeepSearch) {
-        // To avoid locking Gephi UI
-        Thread t = new Thread() {
-            private ProgressTicket progressTicket;
-            Set<String> foaf = new HashSet<>();
+        // Run on a bounded background pool to keep the Gephi UI responsive.
+        executor.submit(new FetchTask(actor, listInit, isFollowsActive, isFollowersActive, isDeepSearch));
+    }
 
-            private void process(String actor, boolean isDeepSearch, Optional<Integer> limitCrawl) {
+    /**
+     * A single fetch job. Reads the network for one actor (and, when deep
+     * search or a list is involved, for the discovered friends-of-a-friend)
+     * and writes it into the graph.
+     */
+    private final class FetchTask implements Runnable {
 
-                try {
-                    if (isFollowsActive) {
-                        List<AppBskyGraphGetFollows> responses = client.appBskyGraphGetFollows(actor, limitCrawl);
+        private final String actor;
+        private final List<String> listInit;
+        private final boolean isFollowsActive;
+        private final boolean isFollowersActive;
+        private final boolean isDeepSearch;
 
-                        for (var response : responses) {
-                            graphModel.getGraph().writeLock();
-                            Identity subject = response.getSubject();
+        private final Set<String> foaf = new HashSet<>();
+        private volatile boolean cancelled = false;
+        private volatile Thread worker;
+        private ProgressTicket progressTicket;
+        private LongConsumer onWaiting;
+
+        FetchTask(String actor, List<String> listInit, boolean isFollowsActive, boolean isFollowersActive, boolean isDeepSearch) {
+            this.actor = actor;
+            this.listInit = listInit;
+            this.isFollowsActive = isFollowsActive;
+            this.isFollowersActive = isFollowersActive;
+            this.isDeepSearch = isDeepSearch;
+        }
+
+        private boolean shouldStop() {
+            return cancelled || Thread.currentThread().isInterrupted();
+        }
+
+        private void process(String actor, boolean isDeepSearch, Optional<Integer> limitCrawl) {
+            if (client == null || graphModel == null) {
+                return;
+            }
+            try {
+                if (isFollowsActive && !shouldStop()) {
+                    // Each page is written as it arrives; pagination stops when the
+                    // worker is interrupted (cancellation).
+                    client.appBskyGraphGetFollows(actor, limitCrawl, response -> {
+                        if (shouldStop()) {
+                            return;
+                        }
+                        Identity subject = response.getSubject();
+                        if (subject == null || subject.getDid() == null) {
+                            return;
+                        }
+                        // Capture the graph once so lock/unlock always target the
+                        // same instance, and release it in finally so an exception
+                        // (bad data, API error, cancellation) can never leak the
+                        // write-lock and freeze Gephi.
+                        Graph graph = graphModel.getGraph();
+                        graph.writeLock();
+                        try {
                             Node source = createNode(subject);
                             source.setColor(Color.GREEN);
-                            for (var follow : response.getFollows()) {
-                                if (isDeepSearch) {
-                                    foaf.add(follow.getDid());
+                            List<Identity> follows = response.getFollows();
+                            if (follows != null) {
+                                for (var follow : follows) {
+                                    if (follow == null || follow.getDid() == null) {
+                                        continue;
+                                    }
+                                    if (isDeepSearch) {
+                                        foaf.add(follow.getDid());
+                                    }
+                                    Node target = createNode(follow);
+                                    createEdge(source, target);
                                 }
-                                Node target = createNode(follow);
-                                createEdge(source, target);
                             }
-                            graphModel.getGraph().writeUnlock();
-
+                        } finally {
+                            graph.writeUnlock();
                         }
+                    }, onWaiting);
+                }
 
-                    }
-
-                    if (isFollowersActive) {
-                        List<AppBskyGraphGetFollowers> responses = client.appBskyGraphGetFollowers(actor, limitCrawl);
-
-                        for (var response : responses) {
-                            graphModel.getGraph().writeLock();
-                            Identity subject = response.getSubject();
+                if (isFollowersActive && !shouldStop()) {
+                    client.appBskyGraphGetFollowers(actor, limitCrawl, response -> {
+                        if (shouldStop()) {
+                            return;
+                        }
+                        Identity subject = response.getSubject();
+                        if (subject == null || subject.getDid() == null) {
+                            return;
+                        }
+                        Graph graph = graphModel.getGraph();
+                        graph.writeLock();
+                        try {
                             Node target = createNode(subject);
                             target.setColor(Color.GREEN);
-                            for (var follower : response.getFollowers()) {
-                                if (isDeepSearch) {
-                                    foaf.add(follower.getDid());
+                            List<Identity> followers = response.getFollowers();
+                            if (followers != null) {
+                                for (var follower : followers) {
+                                    if (follower == null || follower.getDid() == null) {
+                                        continue;
+                                    }
+                                    if (isDeepSearch) {
+                                        foaf.add(follower.getDid());
+                                    }
+                                    Node source = createNode(follower);
+                                    createEdge(source, target);
                                 }
-                                Node source = createNode(follower);
-                                createEdge(source, target);
                             }
-                            graphModel.getGraph().writeUnlock();
+                        } finally {
+                            graph.writeUnlock();
                         }
-
-                    }
-                } catch (Exception e) {
+                    }, onWaiting);
+                }
+            } catch (Exception e) {
+                if (!cancelled) {
                     Exceptions.printStackTrace(e);
-                } finally {
                 }
             }
+        }
 
-            @Override
-            public void run() {
+        @Override
+        public void run() {
+            worker = Thread.currentThread();
+            final String taskName = (actor != null) ? "[Bsky] fetching " + actor : "[Bsky] fetching List";
+            worker.setName(taskName);
 
-                if (actor != null) {
-                    this.setName("[Bsky] fetching" + actor);
+            progressTicket = Lookup.getDefault()
+                    .lookup(ProgressTicketProvider.class)
+                    .createTicket(taskName, () -> {
+                        cancelled = true;
+                        Thread w = worker;
+                        if (w != null) {
+                            w.interrupt();
+                        }
+                        return true;
+                    });
+            // Surface the client's rate-limit backoff as a live countdown in the progress bar.
+            onWaiting = remainingMillis -> {
+                if (remainingMillis <= 0L) {
+                    Progress.setDisplayName(progressTicket, taskName);
                 } else {
-                    this.setName("[Bsky] fetching List");
+                    long seconds = (remainingMillis + 999L) / 1000L;
+                    Progress.setDisplayName(progressTicket, taskName + " - rate limited, retrying in " + seconds + "s");
                 }
-                progressTicket = Lookup.getDefault()
-                        .lookup(ProgressTicketProvider.class)
-                        .createTicket(this.getName(), () -> {
-                            interrupt();
-                            Progress.finish(progressTicket);
-                            return true;
-                        });
+            };
+            try {
                 Progress.start(progressTicket);
                 Progress.switchToIndeterminate(progressTicket);
 
                 if (listInit != null) {
-                    this.foaf.addAll(listInit);
+                    foaf.addAll(listInit);
                 }
                 if (actor != null) {
                     process(actor, isDeepSearch, Optional.empty());
                 }
-                if (listInit != null || isDeepSearch) {
+                if ((listInit != null || isDeepSearch) && !shouldStop()) {
                     Progress.switchToDeterminate(progressTicket, foaf.size());
                     for (var foafActor : foaf) {
+                        if (shouldStop()) {
+                            break;
+                        }
                         Progress.setDisplayName(progressTicket, "[Bsky] fetching " + actor + " n+1 > " + foafActor);
                         if (getIsLimitCrawlActive()) {
                             process(foafActor, false, Optional.of(getLimitCrawl()));
@@ -249,20 +338,26 @@ public class BlueskyGephi {
                             process(foafActor, false, Optional.empty());
                         }
                         Progress.progress(progressTicket);
-
                     }
                 }
+            } finally {
                 Progress.finish(progressTicket);
             }
-        };
-        t.start();
-
+        }
     }
 
     private Stream<String> manageList(String listId) {
-        List<AppBskyGraphGetList> list = client.appBskyGraphGetList(listId);
-        return list.stream().flatMap(x -> x.getItems().stream().map(y -> y.getSubject().getDid()));
-
+        List<String> dids = new ArrayList<>();
+        client.appBskyGraphGetList(listId, page -> {
+            if (page.getItems() != null) {
+                for (var item : page.getItems()) {
+                    if (item != null && item.getSubject() != null && item.getSubject().getDid() != null) {
+                        dids.add(item.getSubject().getDid());
+                    }
+                }
+            }
+        }, null);
+        return dids.stream();
     }
 
     private void initGraphTable() {
@@ -273,28 +368,50 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors, boolean isFollowsActive, boolean isFollowersActive, boolean isBlocksActive) {
+        if (client == null) {
+            logger.warning("Not connected to Bluesky. Please connect before fetching.");
+            return;
+        }
         ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
-        actors.stream().forEach(actor -> fetchFollowerFollowsFromActor(actor, null, isFollowsActive, isFollowersActive, getIsDeepSearch()));
+        actors.stream()
+                .map(String::trim)
+                .filter(actor -> !actor.isEmpty())
+                .forEach(actor -> fetchFollowerFollowsFromActor(actor, null, isFollowsActive, isFollowersActive, getIsDeepSearch()));
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors) {
+        if (client == null) {
+            logger.warning("Not connected to Bluesky. Please connect before fetching.");
+            return;
+        }
         ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
-        actors
-                .stream()
+
+        List<String> cleanActors = actors.stream()
+                .map(String::trim)
+                .filter(x -> !x.isEmpty())
+                .collect(Collectors.toList());
+
+        cleanActors.stream()
                 .filter(x -> !x.contains("app.bsky.graph.list"))
                 .forEach(actor -> fetchFollowerFollowsFromActor(actor, null, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch()));
 
-        List<String> listActor = actors
-                .stream()
+        List<String> listIds = cleanActors.stream()
                 .filter(x -> x.contains("app.bsky.graph.list"))
-                .flatMap(this::manageList)
                 .collect(Collectors.toList());
 
-        fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
-
+        if (!listIds.isEmpty()) {
+            // Resolving a list is itself several paged network calls, so do it
+            // off the EDT instead of blocking the UI thread.
+            executor.submit(() -> {
+                List<String> listActor = listIds.stream()
+                        .flatMap(this::manageList)
+                        .collect(Collectors.toList());
+                fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
+            });
+        }
     }
 }
