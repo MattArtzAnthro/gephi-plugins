@@ -20,8 +20,8 @@ import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
-import org.gephi.project.api.Project;
 import org.gephi.project.api.ProjectController;
+import org.gephi.project.api.Workspace;
 import org.gephi.utils.progress.Progress;
 import org.gephi.utils.progress.ProgressTicket;
 import org.gephi.utils.progress.ProgressTicketProvider;
@@ -65,11 +65,17 @@ public class BlueskyGephi {
     public BlueskyGephi() {
     }
 
-    private void ensureProject() {
+    private void ensureWorkspace() {
         ProjectController projectController = Lookup.getDefault().lookup(ProjectController.class);
-        Project currentProject = projectController.getCurrentProject();
-        if (currentProject == null) {
+        // A workspace can only live inside a project.
+        if (projectController.getCurrentProject() == null) {
             projectController.newProject();
+        }
+        // A project can exist with no open workspace (e.g. all were closed), and
+        // the graph model can't be resolved until one is created and opened.
+        if (projectController.getCurrentWorkspace() == null) {
+            Workspace workspace = projectController.newWorkspace(projectController.getCurrentProject());
+            projectController.openWorkspace(workspace);
         }
     }
 
@@ -368,11 +374,12 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors, boolean isFollowsActive, boolean isFollowersActive, boolean isBlocksActive) {
+        // Guarantee a workspace exists before touching the graph model.
+        ensureWorkspace();
         if (client == null) {
             logger.warning("Not connected to Bluesky. Please connect before fetching.");
             return;
         }
-        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors.stream()
@@ -382,11 +389,12 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors) {
+        // Guarantee a workspace exists before touching the graph model.
+        ensureWorkspace();
         if (client == null) {
             logger.warning("Not connected to Bluesky. Please connect before fetching.");
             return;
         }
-        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
 
