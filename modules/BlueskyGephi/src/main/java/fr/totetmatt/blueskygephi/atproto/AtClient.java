@@ -18,38 +18,62 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 import org.openide.util.Exceptions;
 
 public class AtClient {
+
+    private static final Logger logger = Logger.getLogger(AtClient.class.getName());
 
     private final ObjectMapper objectMapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private final AtContext context;
 
     private final HttpClient client = HttpClient.newHttpClient();
     private ComAtprotoServerCreateSession session = null;
-ExecutorService executorService = Executors.newFixedThreadPool(2);
+
     public AtClient(String host) {
         context = new AtContext(host);
     }
 
     public boolean comAtprotoServerCreateSession(String identifier, String password) {
         try {
+            // Build the JSON body with the mapper so a password containing
+            // quotes/backslashes can't break or inject into the request.
+            String body = objectMapper.writeValueAsString(Map.of(
+                    "identifier", identifier,
+                    "password", password));
             HttpRequest request = HttpRequest.newBuilder(context.getURIForLexicon("com.atproto.server.createSession"))
-                    .POST(HttpRequest.BodyPublishers.ofString("{\"identifier\":\"" + identifier + "\",\"password\":\"" + password + "\"}"))
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
                     .header("Content-Type", "application/json")
                     .build();
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                logger.warning("Bluesky createSession failed (HTTP " + response.statusCode() + "): " + response.body());
+                this.session = null;
+                return false;
+            }
             this.session = objectMapper.readValue(response.body(), ComAtprotoServerCreateSession.class);
-            return true;
+            return this.session != null && this.session.getAccessJwt() != null;
         } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            logger.warning("Bluesky createSession error: " + e.getMessage());
+            this.session = null;
+            return false;
+        }
+    }
+
+    private void requireSession() {
+        if (session == null || session.getAccessJwt() == null) {
+            throw new IllegalStateException("Not authenticated with Bluesky. Please connect first.");
         }
     }
 
     private HttpRequest getRequest(String xrpcMethod, HashMap<String, String> params) {
+        requireSession();
         return HttpRequest
                 .newBuilder(context.getURIForLexicon(xrpcMethod, params))
                 .GET()
@@ -68,7 +92,10 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             while (limitCrawl.isEmpty() ||currentCrawlLoop < limitCrawl.get()) {
                 var request = getRequest("app.bsky.graph.getFollowers", params);
                 var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
+                if (response.statusCode() != 200) {
+                    logger.warning("app.bsky.graph.getFollowers failed for " + actor + " (HTTP " + response.statusCode() + ")");
+                    break;
+                }
                 AppBskyGraphGetFollowers objectResponse = objectMapper.readValue(response.body(), AppBskyGraphGetFollowers.class);
                 pagedResponse.add(objectResponse);
                 if (objectResponse.getCursor() == null) {
@@ -79,6 +106,9 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             }
             return pagedResponse;
         } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new RuntimeException(e);
         }
     }
@@ -93,6 +123,10 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             while (limitCrawl.isEmpty() || currentCrawlLoop < limitCrawl.get()) {
                 var request = getRequest("app.bsky.graph.getFollows", params);
                 var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    logger.warning("app.bsky.graph.getFollows failed for " + actor + " (HTTP " + response.statusCode() + ")");
+                    break;
+                }
                 var objectResponse = objectMapper.readValue(response.body(), AppBskyGraphGetFollows.class);
                 pagedResponse.add(objectResponse);
                 if (objectResponse.getCursor() == null) {
@@ -103,6 +137,9 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             }
             return pagedResponse;
         } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new RuntimeException(e);
         }
     }
@@ -113,9 +150,11 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             params.put("actor", actor);
             var request = getRequest("app.bsky.actor.getProfile", params);
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println(response.body());
             return objectMapper.readValue(response.body(), AppBskyActorGetProfile.class);
         } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             Exceptions.printStackTrace(ex);
         }
         return null;
@@ -128,18 +167,23 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             params.put("list", list);
             params.put("limit", "100");
             while (true) {
-            var request = getRequest("app.bsky.graph.getList", params);
-            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-              var objectResponse =  objectMapper.readValue(response.body(), AppBskyGraphGetList.class);
-               lists.add(objectResponse);
-                         System.out.println(response.body());
-                if (objectResponse.getCursor() == null) {
-                        break;
+                var request = getRequest("app.bsky.graph.getList", params);
+                var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    logger.warning("app.bsky.graph.getList failed for " + list + " (HTTP " + response.statusCode() + ")");
+                    break;
                 }
-               
+                var objectResponse = objectMapper.readValue(response.body(), AppBskyGraphGetList.class);
+                lists.add(objectResponse);
+                if (objectResponse.getCursor() == null) {
+                    break;
+                }
                 params.put("cursor", objectResponse.getCursor());
             }
         } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             Exceptions.printStackTrace(ex);
         }
         return lists;
@@ -147,6 +191,7 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
 
     public AppBskyActorGetProfile appBskyActorGetProfiles(String actors) {
         try {
+            requireSession();
             var request = HttpRequest
                     .newBuilder(context.getURIForLexicon("app.bsky.actor.getProfiles", actors))
                     .GET()
@@ -155,6 +200,9 @@ ExecutorService executorService = Executors.newFixedThreadPool(2);
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
             return objectMapper.readValue(response.body(), AppBskyActorGetProfile.class);
         } catch (IOException | InterruptedException ex) {
+            if (ex instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             Exceptions.printStackTrace(ex);
         }
         return null;
