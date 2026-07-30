@@ -1,8 +1,10 @@
 package fr.totetmatt.blueskygephi;
 
 import fr.totetmatt.blueskygephi.atproto.AtClient;
+import fr.totetmatt.blueskygephi.atproto.AtProtoException;
 import fr.totetmatt.blueskygephi.atproto.response.common.Identity;
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -11,10 +13,13 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.LongConsumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.swing.Icon;
+import javax.swing.UIManager;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
@@ -25,7 +30,7 @@ import org.gephi.project.api.Workspace;
 import org.gephi.utils.progress.Progress;
 import org.gephi.utils.progress.ProgressTicket;
 import org.gephi.utils.progress.ProgressTicketProvider;
-import org.openide.util.Exceptions;
+import org.openide.awt.NotificationDisplayer;
 import org.openide.util.Lookup;
 import org.openide.util.NbPreferences;
 import org.openide.util.lookup.ServiceProvider;
@@ -177,6 +182,25 @@ public class BlueskyGephi {
         return edge;
     }
 
+    /**
+     * Reports a failure to the user without the raw NetBeans stack-trace dialog:
+     * the full technical detail (with stack trace) is logged for debugging, while
+     * the user sees a concise, non-blocking notification bubble with an
+     * actionable reason.
+     */
+    private void reportError(String title, String detail, Throwable t) {
+        logger.log(Level.WARNING, title + " - " + detail, t);
+        EventQueue.invokeLater(() -> {
+            Icon icon = UIManager.getIcon("OptionPane.warningIcon");
+            if (icon == null) {
+                icon = new javax.swing.ImageIcon(
+                        new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB));
+            }
+            NotificationDisplayer.getDefault().notify(title, icon, detail, null,
+                    NotificationDisplayer.Priority.HIGH);
+        });
+    }
+
     private void fetchFollowerFollowsFromActor(String actor, List<String> listInit, boolean isFollowsActive, boolean isFollowersActive, boolean isDeepSearch) {
         // Run on a bounded background pool to keep the Gephi UI responsive.
         executor.submit(new FetchTask(actor, listInit, isFollowsActive, isFollowersActive, isDeepSearch));
@@ -289,9 +313,17 @@ public class BlueskyGephi {
                         }
                     }, onWaiting);
                 }
+            } catch (AtProtoException e) {
+                // Expected failure mode (auth, rate limit, bad handle, network):
+                // report a clear reason plus the server's own response, not a stack trace.
+                if (!cancelled) {
+                    reportError("Bluesky: could not fetch \"" + actor + "\"", e.getUserMessageWithContent(), e);
+                }
             } catch (Exception e) {
                 if (!cancelled) {
-                    Exceptions.printStackTrace(e);
+                    reportError("Bluesky: could not fetch \"" + actor + "\"",
+                            "Unexpected error: " + e.getClass().getSimpleName()
+                            + (e.getMessage() != null ? " - " + e.getMessage() : ""), e);
                 }
             }
         }
@@ -415,10 +447,18 @@ public class BlueskyGephi {
             // Resolving a list is itself several paged network calls, so do it
             // off the EDT instead of blocking the UI thread.
             executor.submit(() -> {
-                List<String> listActor = listIds.stream()
-                        .flatMap(this::manageList)
-                        .collect(Collectors.toList());
-                fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
+                try {
+                    List<String> listActor = listIds.stream()
+                            .flatMap(this::manageList)
+                            .collect(Collectors.toList());
+                    fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
+                } catch (AtProtoException e) {
+                    reportError("Bluesky: could not resolve list", e.getUserMessageWithContent(), e);
+                } catch (Exception e) {
+                    reportError("Bluesky: could not resolve list",
+                            "Unexpected error: " + e.getClass().getSimpleName()
+                            + (e.getMessage() != null ? " - " + e.getMessage() : ""), e);
+                }
             });
         }
     }
