@@ -1,8 +1,11 @@
 package fr.totetmatt.blueskygephi;
 
 import fr.totetmatt.blueskygephi.atproto.AtClient;
+import fr.totetmatt.blueskygephi.atproto.AtIdentity;
+import fr.totetmatt.blueskygephi.atproto.AtProtoException;
 import fr.totetmatt.blueskygephi.atproto.response.common.Identity;
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -11,21 +14,24 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.LongConsumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.swing.Icon;
+import javax.swing.UIManager;
 import org.gephi.graph.api.Edge;
 import org.gephi.graph.api.Graph;
 import org.gephi.graph.api.GraphController;
 import org.gephi.graph.api.GraphModel;
 import org.gephi.graph.api.Node;
-import org.gephi.project.api.Project;
 import org.gephi.project.api.ProjectController;
+import org.gephi.project.api.Workspace;
 import org.gephi.utils.progress.Progress;
 import org.gephi.utils.progress.ProgressTicket;
 import org.gephi.utils.progress.ProgressTicketProvider;
-import org.openide.util.Exceptions;
+import org.openide.awt.NotificationDisplayer;
 import org.openide.util.Lookup;
 import org.openide.util.NbPreferences;
 import org.openide.util.lookup.ServiceProvider;
@@ -65,11 +71,17 @@ public class BlueskyGephi {
     public BlueskyGephi() {
     }
 
-    private void ensureProject() {
+    private void ensureWorkspace() {
         ProjectController projectController = Lookup.getDefault().lookup(ProjectController.class);
-        Project currentProject = projectController.getCurrentProject();
-        if (currentProject == null) {
+        // A workspace can only live inside a project.
+        if (projectController.getCurrentProject() == null) {
             projectController.newProject();
+        }
+        // A project can exist with no open workspace (e.g. all were closed), and
+        // the graph model can't be resolved until one is created and opened.
+        if (projectController.getCurrentWorkspace() == null) {
+            Workspace workspace = projectController.newWorkspace(projectController.getCurrentProject());
+            projectController.openWorkspace(workspace);
         }
     }
 
@@ -84,6 +96,18 @@ public class BlueskyGephi {
     }
     public String getHost(){
         return nbPref.get(NBPREF_ATPROTO_HOST,"bsky.social");
+    }
+
+    /**
+     * Determines the account's PDS host from its handle (unauthenticated), so
+     * the user can auto-fill the host field. This is a network call and must be
+     * run off the EDT.
+     *
+     * @return the resolved PDS host, e.g. {@code shaggymane.us-west.host.bsky.network}.
+     * @throws AtProtoException if the handle can't be resolved to a PDS.
+     */
+    public String resolveHostFromHandle(String handle) {
+        return AtIdentity.resolveHost(handle);
     }
     public String getHandle() {
         return nbPref.get(NBPREF_BSKY_HANDLE, "");
@@ -169,6 +193,25 @@ public class BlueskyGephi {
         }
 
         return edge;
+    }
+
+    /**
+     * Reports a failure to the user without the raw NetBeans stack-trace dialog:
+     * the full technical detail (with stack trace) is logged for debugging, while
+     * the user sees a concise, non-blocking notification bubble with an
+     * actionable reason.
+     */
+    private void reportError(String title, String detail, Throwable t) {
+        logger.log(Level.WARNING, title + " - " + detail, t);
+        EventQueue.invokeLater(() -> {
+            Icon icon = UIManager.getIcon("OptionPane.warningIcon");
+            if (icon == null) {
+                icon = new javax.swing.ImageIcon(
+                        new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB));
+            }
+            NotificationDisplayer.getDefault().notify(title, icon, detail, null,
+                    NotificationDisplayer.Priority.HIGH);
+        });
     }
 
     private void fetchFollowerFollowsFromActor(String actor, List<String> listInit, boolean isFollowsActive, boolean isFollowersActive, boolean isDeepSearch) {
@@ -283,9 +326,17 @@ public class BlueskyGephi {
                         }
                     }, onWaiting);
                 }
+            } catch (AtProtoException e) {
+                // Expected failure mode (auth, rate limit, bad handle, network):
+                // report a clear reason plus the server's own response, not a stack trace.
+                if (!cancelled) {
+                    reportError("Bluesky: could not fetch \"" + actor + "\"", e.getUserMessageWithContent(), e);
+                }
             } catch (Exception e) {
                 if (!cancelled) {
-                    Exceptions.printStackTrace(e);
+                    reportError("Bluesky: could not fetch \"" + actor + "\"",
+                            "Unexpected error: " + e.getClass().getSimpleName()
+                            + (e.getMessage() != null ? " - " + e.getMessage() : ""), e);
                 }
             }
         }
@@ -368,11 +419,12 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors, boolean isFollowsActive, boolean isFollowersActive, boolean isBlocksActive) {
+        // Guarantee a workspace exists before touching the graph model.
+        ensureWorkspace();
         if (client == null) {
             logger.warning("Not connected to Bluesky. Please connect before fetching.");
             return;
         }
-        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
         actors.stream()
@@ -382,11 +434,12 @@ public class BlueskyGephi {
     }
 
     public void fetchFollowerFollowsFromActors(List<String> actors) {
+        // Guarantee a workspace exists before touching the graph model.
+        ensureWorkspace();
         if (client == null) {
             logger.warning("Not connected to Bluesky. Please connect before fetching.");
             return;
         }
-        ensureProject();
         graphModel = Lookup.getDefault().lookup(GraphController.class).getGraphModel();
         initGraphTable();
 
@@ -407,10 +460,18 @@ public class BlueskyGephi {
             // Resolving a list is itself several paged network calls, so do it
             // off the EDT instead of blocking the UI thread.
             executor.submit(() -> {
-                List<String> listActor = listIds.stream()
-                        .flatMap(this::manageList)
-                        .collect(Collectors.toList());
-                fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
+                try {
+                    List<String> listActor = listIds.stream()
+                            .flatMap(this::manageList)
+                            .collect(Collectors.toList());
+                    fetchFollowerFollowsFromActor(null, listActor, getIsFollowsActive(), getIsFollowersActive(), getIsDeepSearch());
+                } catch (AtProtoException e) {
+                    reportError("Bluesky: could not resolve list", e.getUserMessageWithContent(), e);
+                } catch (Exception e) {
+                    reportError("Bluesky: could not resolve list",
+                            "Unexpected error: " + e.getClass().getSimpleName()
+                            + (e.getMessage() != null ? " - " + e.getMessage() : ""), e);
+                }
             });
         }
     }

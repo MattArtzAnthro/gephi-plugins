@@ -101,19 +101,20 @@
                       <Component id="credentialsConnectButton" max="32767" attributes="0"/>
                       <Group type="102" attributes="0">
                           <Group type="103" groupAlignment="0" attributes="0">
-                              <Component id="credentialsPasswordLabel" alignment="0" min="-2" max="-2" attributes="0"/>
                               <Component id="credentialsHandleLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                              <Component id="credentialsHostLabel" alignment="0" min="-2" max="-2" attributes="0"/>
+                              <Component id="credentialsPasswordLabel" alignment="0" min="-2" max="-2" attributes="0"/>
                           </Group>
                           <EmptySpace type="separate" max="-2" attributes="0"/>
                           <Group type="103" groupAlignment="0" attributes="0">
                               <Component id="credentialsHandleField" pref="263" max="32767" attributes="0"/>
                               <Component id="credentialsPasswordField" max="32767" attributes="0"/>
+                              <Group type="102" alignment="0" attributes="0">
+                                  <Component id="credentialsHostField" pref="263" max="32767" attributes="0"/>
+                                  <EmptySpace max="-2" attributes="0"/>
+                                  <Component id="credentialsCheckButton" min="-2" max="-2" attributes="0"/>
+                              </Group>
                           </Group>
-                      </Group>
-                      <Group type="102" alignment="0" attributes="0">
-                          <Component id="credentialsHostLabel" min="-2" max="-2" attributes="0"/>
-                          <EmptySpace min="-2" pref="43" max="-2" attributes="0"/>
-                          <Component id="credentialsHostField" pref="263" max="32767" attributes="0"/>
                       </Group>
                   </Group>
                   <EmptySpace max="-2" attributes="0"/>
@@ -125,13 +126,14 @@
               <Group type="102" alignment="1" attributes="0">
                   <EmptySpace min="0" pref="9" max="32767" attributes="0"/>
                   <Group type="103" groupAlignment="3" attributes="0">
-                      <Component id="credentialsHostLabel" alignment="3" min="-2" max="-2" attributes="0"/>
-                      <Component id="credentialsHostField" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="credentialsHandleLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="credentialsHandleField" alignment="3" min="-2" max="-2" attributes="0"/>
                   </Group>
                   <EmptySpace type="unrelated" max="-2" attributes="0"/>
                   <Group type="103" groupAlignment="3" attributes="0">
-                      <Component id="credentialsHandleLabel" alignment="3" min="-2" max="-2" attributes="0"/>
-                      <Component id="credentialsHandleField" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="credentialsHostLabel" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="credentialsHostField" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="credentialsCheckButton" alignment="3" min="-2" max="-2" attributes="0"/>
                   </Group>
                   <EmptySpace type="unrelated" max="-2" attributes="0"/>
                   <Group type="103" groupAlignment="3" attributes="0">
@@ -207,6 +209,19 @@
           </Properties>
           <Events>
             <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="credentialsConnectButtonActionPerformed"/>
+          </Events>
+        </Component>
+        <Component class="javax.swing.JButton" name="credentialsCheckButton">
+          <Properties>
+            <Property name="text" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="fr/totetmatt/blueskygephi/Bundle.properties" key="BlueskyGephiMainPanel.credentialsCheckButton.text" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+            <Property name="toolTipText" type="java.lang.String" editor="org.netbeans.modules.i18n.form.FormI18nStringEditor">
+              <ResourceString bundle="fr/totetmatt/blueskygephi/Bundle.properties" key="BlueskyGephiMainPanel.credentialsCheckButton.toolTipText" replaceFormat="org.openide.util.NbBundle.getMessage({sourceFileName}.class, &quot;{key}&quot;)"/>
+            </Property>
+          </Properties>
+          <Events>
+            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="credentialsCheckButtonActionPerformed"/>
           </Events>
         </Component>
       </SubComponents>
