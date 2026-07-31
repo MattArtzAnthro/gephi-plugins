@@ -1,6 +1,7 @@
 package fr.totetmatt.blueskygephi;
 
 import fr.totetmatt.blueskygephi.atproto.AtClient;
+import fr.totetmatt.blueskygephi.atproto.AtIdentity;
 import fr.totetmatt.blueskygephi.atproto.AtProtoException;
 import fr.totetmatt.blueskygephi.atproto.response.common.Identity;
 import java.awt.Color;
@@ -95,6 +96,18 @@ public class BlueskyGephi {
     }
     public String getHost(){
         return nbPref.get(NBPREF_ATPROTO_HOST,"bsky.social");
+    }
+
+    /**
+     * Determines the account's PDS host from its handle (unauthenticated), so
+     * the user can auto-fill the host field. This is a network call and must be
+     * run off the EDT.
+     *
+     * @return the resolved PDS host, e.g. {@code shaggymane.us-west.host.bsky.network}.
+     * @throws AtProtoException if the handle can't be resolved to a PDS.
+     */
+    public String resolveHostFromHandle(String handle) {
+        return AtIdentity.resolveHost(handle);
     }
     public String getHandle() {
         return nbPref.get(NBPREF_BSKY_HANDLE, "");

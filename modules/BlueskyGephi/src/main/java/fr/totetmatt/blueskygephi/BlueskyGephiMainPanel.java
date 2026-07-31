@@ -4,16 +4,21 @@
  */
 package fr.totetmatt.blueskygephi;
 
+import fr.totetmatt.blueskygephi.atproto.AtProtoException;
 import java.awt.Color;
 import java.awt.Desktop;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import javax.swing.Icon;
+import javax.swing.UIManager;
 import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
+import org.openide.awt.NotificationDisplayer;
 import org.openide.util.Exceptions;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
@@ -75,6 +80,7 @@ public class BlueskyGephiMainPanel extends TopComponent {
         credentialsPasswordLabel = new javax.swing.JLabel();
         credentialsPasswordField = new javax.swing.JPasswordField();
         credentialsConnectButton = new javax.swing.JButton();
+        credentialsCheckButton = new javax.swing.JButton();
         jScrollPane1 = new javax.swing.JScrollPane();
         handleSearchTextArea = new javax.swing.JTextArea();
         fetchLabel = new javax.swing.JLabel();
@@ -123,6 +129,14 @@ public class BlueskyGephiMainPanel extends TopComponent {
             }
         });
 
+        org.openide.awt.Mnemonics.setLocalizedText(credentialsCheckButton, org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsCheckButton.text")); // NOI18N
+        credentialsCheckButton.setToolTipText(org.openide.util.NbBundle.getMessage(BlueskyGephiMainPanel.class, "BlueskyGephiMainPanel.credentialsCheckButton.toolTipText")); // NOI18N
+        credentialsCheckButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                credentialsCheckButtonActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout credentialsPanelLayout = new javax.swing.GroupLayout(credentialsPanel);
         credentialsPanel.setLayout(credentialsPanelLayout);
         credentialsPanelLayout.setHorizontalGroup(
@@ -133,16 +147,17 @@ public class BlueskyGephiMainPanel extends TopComponent {
                     .addComponent(credentialsConnectButton, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(credentialsPanelLayout.createSequentialGroup()
                         .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(credentialsPasswordLabel)
-                            .addComponent(credentialsHandleLabel))
+                            .addComponent(credentialsHandleLabel)
+                            .addComponent(credentialsHostLabel)
+                            .addComponent(credentialsPasswordLabel))
                         .addGap(18, 18, 18)
                         .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(credentialsHandleField, javax.swing.GroupLayout.DEFAULT_SIZE, 263, Short.MAX_VALUE)
-                            .addComponent(credentialsPasswordField)))
-                    .addGroup(credentialsPanelLayout.createSequentialGroup()
-                        .addComponent(credentialsHostLabel)
-                        .addGap(43, 43, 43)
-                        .addComponent(credentialsHostField, javax.swing.GroupLayout.DEFAULT_SIZE, 263, Short.MAX_VALUE)))
+                            .addComponent(credentialsPasswordField)
+                            .addGroup(credentialsPanelLayout.createSequentialGroup()
+                                .addComponent(credentialsHostField, javax.swing.GroupLayout.DEFAULT_SIZE, 263, Short.MAX_VALUE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(credentialsCheckButton)))))
                 .addContainerGap())
         );
         credentialsPanelLayout.setVerticalGroup(
@@ -150,12 +165,13 @@ public class BlueskyGephiMainPanel extends TopComponent {
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, credentialsPanelLayout.createSequentialGroup()
                 .addGap(0, 9, Short.MAX_VALUE)
                 .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(credentialsHostLabel)
-                    .addComponent(credentialsHostField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(credentialsHandleLabel)
                     .addComponent(credentialsHandleField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(credentialsHostLabel)
+                    .addComponent(credentialsHostField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(credentialsCheckButton))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(credentialsPanelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(credentialsPasswordLabel)
@@ -297,6 +313,50 @@ public class BlueskyGephiMainPanel extends TopComponent {
         }.execute();
     }//GEN-LAST:event_credentialsConnectButtonActionPerformed
 
+    private void credentialsCheckButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_credentialsCheckButtonActionPerformed
+        final String handle = credentialsHandleField.getText();
+        // Resolve the account's PDS host off the EDT so a slow lookup never freezes the UI.
+        credentialsCheckButton.setEnabled(false);
+        credentialsCheckButton.setBackground(Color.ORANGE);
+        new javax.swing.SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                return blueskyGephi.resolveHostFromHandle(handle);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    String host = get();
+                    credentialsHostField.setText(host);
+                    credentialsCheckButton.setBackground(Color.GREEN);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    credentialsCheckButton.setBackground(Color.RED);
+                } catch (ExecutionException ex) {
+                    credentialsCheckButton.setBackground(Color.RED);
+                    Throwable cause = (ex.getCause() != null) ? ex.getCause() : ex;
+                    String detail = (cause instanceof AtProtoException)
+                            ? ((AtProtoException) cause).getUserMessageWithContent()
+                            : String.valueOf(cause.getMessage());
+                    consoleLogger.warning("Host check failed for \"" + handle + "\": " + detail);
+                    notifyError("Bluesky: could not determine host from handle", detail);
+                } finally {
+                    credentialsCheckButton.setEnabled(true);
+                }
+            }
+        }.execute();
+    }//GEN-LAST:event_credentialsCheckButtonActionPerformed
+
+    private void notifyError(String title, String detail) {
+        Icon icon = UIManager.getIcon("OptionPane.warningIcon");
+        if (icon == null) {
+            icon = new javax.swing.ImageIcon(
+                    new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB));
+        }
+        NotificationDisplayer.getDefault().notify(title, icon, detail, null, NotificationDisplayer.Priority.HIGH);
+    }
+
     private void runFetchButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_runFetchButtonActionPerformed
          blueskyGephi.setQuery(handleSearchTextArea.getText());
          List<String> actors = Arrays.asList(handleSearchTextArea.getText().split("\\n"))
@@ -339,6 +399,7 @@ public class BlueskyGephiMainPanel extends TopComponent {
 
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JButton credentialsCheckButton;
     private javax.swing.JButton credentialsConnectButton;
     private javax.swing.JTextField credentialsHandleField;
     private javax.swing.JLabel credentialsHandleLabel;
