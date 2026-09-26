@@ -331,6 +331,11 @@
         <!-- origin: fork (natesteinmeyer/gephi-plugins) -->
         <!-- status: active -->
         <module>modules/WeightedBridgingCentrality</module>
+
+        <!-- name: Gephi AI -->
+        <!-- origin: fork (MattArtzAnthro/gephi-plugins) -->
+        <!-- status: active -->
+        <module>modules/GephiAI</module>
     </modules>
     
     <!-- Properties -->
