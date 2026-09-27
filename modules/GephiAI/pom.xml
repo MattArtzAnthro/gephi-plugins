@@ -12,7 +12,7 @@
 
     <groupId>org.gephi.plugins</groupId>
     <artifactId>gephi-ai</artifactId>
-    <version>1.3.3</version>
+    <version>1.5.0</version>
     <packaging>nbm</packaging>
 
     <name>Gephi AI</name>
@@ -115,19 +115,46 @@
             <artifactId>org-openide-dialogs</artifactId>
         </dependency>
 
-        <!-- Bundled libraries -->
         <dependency>
-            <groupId>org.nanohttpd</groupId>
-            <artifactId>nanohttpd</artifactId>
-            <version>2.3.1</version>
+            <groupId>org.gephi</groupId>
+            <artifactId>appearance-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>appearance-plugin</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>core-library-wrapper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>desktop-appearance</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>desktop-statistics</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>io-exporter-preview</artifactId>
+        </dependency>
+
+        <!-- Bundled libraries -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.10.1</version>
+            <version>2.14.0</version>
         </dependency>
 
         <!-- Test only: unit tests for the pure helpers (no Gephi runtime needed) -->
+        <!-- Test only: Gephi's filter controller, which runs combined filters. At runtime it
+             comes from the host Gephi install via Lookup. -->
+        <dependency>
+            <groupId>org.gephi</groupId>
+            <artifactId>filters-impl</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
