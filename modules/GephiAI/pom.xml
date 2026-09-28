@@ -186,6 +186,21 @@
 
     <build>
         <plugins>
+            <!--
+              NetBeans runs the module's installer inside the test JVM, which starts the API
+              server two seconds later. Headless keeps a bind failure from opening a dialog on
+              the desktop, and port 0 keeps the server off 8080, where a running Gephi listens.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <java.awt.headless>true</java.awt.headless>
+                        <gephi.mcp.port>0</gephi.mcp.port>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.netbeans.utilities</groupId>
                 <artifactId>nbm-maven-plugin</artifactId>
